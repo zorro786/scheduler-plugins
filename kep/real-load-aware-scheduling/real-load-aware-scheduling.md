@@ -210,52 +210,51 @@ Following is the algorithm:
 **Algorithm**
 
 
-1. Get the requested resource for the pod to be scheduled as, r.
-2. Get the sliding window average (M) and standard deviation (V) of resource utilization fraction (range from 0 to 1) for all types of resources (CPU, Memory, GPU, etc.) of the current node to be scored. 
-3. Calculate the score of the current node for each type of resource; Si = M + r +V
-4. Get a score for each type of resource and bound it to [0,1]: Si = min(Si, 1.0)
-5. Calculate the node priority score per resource as: Ui = (1 - Si) * MaxPriority
-6. Get the final node score as: U = min(Ui)
+1. Get the requested resource for the pod to be scheduled as, <img src="https://render.githubusercontent.com/render/math?math=r">.
+2. Get the sliding window average (<img src="https://render.githubusercontent.com/render/math?math=M">) and standard deviation (<img src="https://render.githubusercontent.com/render/math?math=V">) of resource utilization fraction (range from 0 to 1) for all types of resources (CPU, Memory, GPU, etc.) of the current node to be scored. 
+3. Calculate the score of the current node for each type of resource: <img src="https://render.githubusercontent.com/render/math?math=S_i = M %2B r %2B V">
+4. Get a score for each type of resource and bound it to [0,1]: <img src="https://render.githubusercontent.com/render/math?math=S_i = \min(S_i, 1.0)">
+5. Calculate the node priority score per resource as: <img src="https://render.githubusercontent.com/render/math?math=U_i = (1 - S_i) \times MaxPriority ">
+6. Get the final node score as: <img src="https://render.githubusercontent.com/render/math?math=U = \min_i(U_i)">
 
 **Example**
 
 
-For example, let's say we have three nodes N1, N2, and N3, and the pod to be scheduled have CPU and Memory requests as 500 milicores and 1 GB. All nodes have a capacity of 4 cores and 8 GB.
+For example, let's say we have three nodes `N1`, `N2`, and `N3`, and the pod to be scheduled have CPU and Memory requests as 500 milicores and 1 GB. All nodes have a capacity of 4 cores and 8 GB.
 
-The pod request fraction can be computed as r_cpu = ⅛,   r_memory = ⅛ 
+The pod request fraction can be computed as <img src="https://render.githubusercontent.com/render/math?math=r_{cpu} = \frac{1}{8}, r_{memory} = \frac{1}{8}">. 
 
 
-
-![](images/image4.png "image_tooltip")
+![](images/image6.png "image_tooltip")
 
 
 Then according to steps 2 ~ 4, the mean and standard deviation of CPU and memory fraction utilization can be computed as follows:
 
 
 
-![](images/image5.png "image_tooltip")
+![](images/image9.png "image_tooltip")
 
 
 The score for each type of resource and each node are as follows according to step 5 ~ 6:
 
 
 
-![](images/image6.png "image_tooltip")
+![](images/image1.png "image_tooltip")
 
 
-According to the scores we have, node N3 will be selected. The utilization fraction of nodes before and after the placement is as follows.
+According to the scores we have, node `N3` will be selected. The utilization fraction of nodes before and after the placement is as follows.
+
+
+![](images/image5.png "image_tooltip")
 
 
 ![](images/image7.png "image_tooltip")
 
 
-![](images/image8.png "image_tooltip")
-
-
 If we plot these in mu-sigma plots, we can see the placement automatically pushes the utilization of nodes toward the diagonal line sigma = 1 - mu.
 
 
-![](images/image9.png "image_tooltip")
+![](images/image2.png "image_tooltip")
 
 
 

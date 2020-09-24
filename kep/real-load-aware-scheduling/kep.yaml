@@ -2,6 +2,7 @@ title: Real Load Aware Scheduling
 kep-number:
 authors:
   - "@zorro786"
+  - "@wangchen615"
 owning-sig: sig-scheduling
 reviewers:
   - "@Huang-Wei"
