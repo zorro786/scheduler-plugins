@@ -202,7 +202,7 @@ This plugin would extend the Score extension point. K8s scheduler framework call
 
 Balancing load based on average would be risky sometimes, as it does not consider the bursty variations. A safe balancing plugin balances not only the average load but also the risk caused by load variations. Suppose we take the mean (M) and standard deviation (V) of all nodes’ utilization into a mu-sigma plot below. In that case, the safe balancing plugin will make placements such that all nodes’ utilization are aligned on the diagonal line, which is V + M = c. Here, c is a constant indicating the overall cluster utilization average plus the standard deviation.
 
-<img src="images/safe-sched-graph.png" alt="safe-sched-graph" width="600" height="400"/>
+<img src="images/safe-sched-graph.png" alt="safe-sched-graph" width="800" height="400"/>
 
 
 Following is the algorithm:
@@ -226,24 +226,24 @@ For example, let's say we have three nodes `N1`, `N2`, and `N3`, and the pod to 
 The pod request fraction can be computed as <img src="https://render.githubusercontent.com/render/math?math=r_{cpu} = \frac{1}{8}, r_{memory} = \frac{1}{8}">. 
 
 
-<img src="images/image6.png" alt="node-capacity" width="800" height="500"/>
+<img src="images/image6.png" alt="node-capacity" width="800" height="200"/>
 
 
 Then according to steps 2 ~ 4, the mean and standard deviation of CPU and memory fraction utilization can be computed as follows:
 
 
-<img src="images/image9.png" alt="node-mn-std-util" width="800" height="300"/>
+<img src="images/image9.png" alt="node-mn-std-util" width="800" height="200"/>
 
 
 The score for each type of resource and each node are as follows according to step 5 ~ 6:
 
 
-<img src="images/image1.png" alt="node-mn-std-util" width="600" height="300"/>
+<img src="images/image1.png" alt="node-mn-std-util" width="600" height="200"/>
 
 
 According to the scores we have, node `N3` will be selected. The utilization fraction of nodes before and after the placement is as follows.
 
-<img src="images/image5.png" alt="before-placement" width="600" height="200"/>
+<img src="images/image5.png" alt="before-placement" width="600" height="150"/>
 
 <img src="images/image7.png" alt="after-placement" width="600" height="200"/>
 
@@ -251,7 +251,7 @@ According to the scores we have, node `N3` will be selected. The utilization fra
 If we plot these in mu-sigma plots, we can see the placement automatically pushes the utilization of nodes toward the diagonal line sigma = 1 - mu.
 
 
-![](images/image2.png "image_tooltip")
+<img src="images/image2.png" alt="mu-sigma-plot" width="800" height="800"/>
 
 
 
