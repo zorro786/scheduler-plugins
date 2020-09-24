@@ -138,7 +138,7 @@ The 50% threshold value for utilisation will be made configurable.
 
 **Algorithm Analysis**
 
-<img src="images/bfbp-graph.png" alt="bfbp-graph" width="700" height="600"/>
+<img src="images/bfbp-graph.png" alt="bfbp-graph" width="600" height="400"/>
 
 
 The above is a plot of the piecewise function outlined in the algorithm. The key observations here are manifold:
