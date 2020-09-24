@@ -232,7 +232,7 @@ The pod request fraction can be computed as <img src="https://render.githubuserc
 Then according to steps 2 ~ 4, the mean and standard deviation of CPU and memory fraction utilization can be computed as follows:
 
 
-<img src="images/image9.png" alt="node-mn-std-util" width="700" height="100"/>
+<img src="images/image9.png" alt="node-mn-std-util" width="600" height="100"/>
 
 
 The score for each type of resource and each node are as follows according to step 5 ~ 6:
@@ -251,7 +251,7 @@ According to the scores we have, node `N3` will be selected. The utilization fra
 If we plot these in mu-sigma plots, we can see the placement automatically pushes the utilization of nodes toward the diagonal line sigma = 1 - mu.
 
 
-<img src="images/image2.png" alt="mu-sigma-plot" width="620" height="600"/>
+<img src="images/image2.png" alt="mu-sigma-plot" width="580" height="600"/>
 
 
 
