@@ -59,7 +59,8 @@ If utilization metrics are not available for a long time, we will fall back to t
 ## Design Details
 
 
-![](images/design.png "design")
+
+<img src="images/design.png" alt="design" width="720" height="628"/>
 
 
 
