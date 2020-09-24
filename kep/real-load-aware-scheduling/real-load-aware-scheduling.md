@@ -202,7 +202,7 @@ This plugin would extend the Score extension point. K8s scheduler framework call
 
 Balancing load based on average would be risky sometimes, as it does not consider the bursty variations. A safe balancing plugin balances not only the average load but also the risk caused by load variations. Suppose we take the mean (M) and standard deviation (V) of all nodes’ utilization into a mu-sigma plot below. In that case, the safe balancing plugin will make placements such that all nodes’ utilization are aligned on the diagonal line, which is V + M = c. Here, c is a constant indicating the overall cluster utilization average plus the standard deviation.
 
-![](images/safe-sched-graph.png "safe-sched-graph")
+![](images/safe-sched-graph.png "safe-sched-graph" =400x400)
 
 Following is the algorithm:
 
@@ -225,21 +225,21 @@ For example, let's say we have three nodes `N1`, `N2`, and `N3`, and the pod to 
 The pod request fraction can be computed as <img src="https://render.githubusercontent.com/render/math?math=r_{cpu} = \frac{1}{8}, r_{memory} = \frac{1}{8}">. 
 
 
-![](images/image6.png "image_tooltip")
+![](images/image6.png "image_tooltip" =400x200)
 
 
 Then according to steps 2 ~ 4, the mean and standard deviation of CPU and memory fraction utilization can be computed as follows:
 
 
 
-![](images/image9.png "image_tooltip")
+![](images/image9.png "image_tooltip" =400x200)
 
 
 The score for each type of resource and each node are as follows according to step 5 ~ 6:
 
 
 
-![](images/image1.png "image_tooltip")
+![](images/image1.png "image_tooltip" =400x200)
 
 
 According to the scores we have, node `N3` will be selected. The utilization fraction of nodes before and after the placement is as follows.
