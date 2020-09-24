@@ -202,7 +202,8 @@ This plugin would extend the Score extension point. K8s scheduler framework call
 
 Balancing load based on average would be risky sometimes, as it does not consider the bursty variations. A safe balancing plugin balances not only the average load but also the risk caused by load variations. Suppose we take the mean (M) and standard deviation (V) of all nodes’ utilization into a mu-sigma plot below. In that case, the safe balancing plugin will make placements such that all nodes’ utilization are aligned on the diagonal line, which is V + M = c. Here, c is a constant indicating the overall cluster utilization average plus the standard deviation.
 
-![](images/safe-sched-graph.png "safe-sched-graph" =400x400)
+<img src="images/safe-sched-graph.png" alt="safe-sched-graph" width="400" height="400"/>
+
 
 Following is the algorithm:
 
