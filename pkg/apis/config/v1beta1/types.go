@@ -19,6 +19,7 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schedulerconfig "k8s.io/kube-scheduler/config/v1"
+	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -69,4 +70,12 @@ type CapacitySchedulingArgs struct {
 
 	// KubeConfigPath is the path of kubeconfig.
 	KubeConfigPath *string `json:"kubeconfigpath,omitempty"`
+}
+
+// BestFitBinPackArgs holds arguments used to configure BestFitBinPack plugin.
+type BestFitBinPackArgs struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// PodTopologySpread args
+	PTSArgs config.PodTopologySpreadArgs
 }

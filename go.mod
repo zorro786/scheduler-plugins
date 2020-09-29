@@ -6,6 +6,7 @@ require (
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/google/go-cmp v0.4.0
 	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.4.0
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
 	k8s.io/apiserver v0.19.0
@@ -15,6 +16,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20200805222855-6aeccd4b50c6
 	k8s.io/kube-scheduler v0.19.0
 	k8s.io/kubernetes v1.19.0
+	metrics/loadwatcher v0.0.0
 )
 
 replace (
@@ -40,4 +42,5 @@ replace (
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.19.0
 	k8s.io/metrics => k8s.io/metrics v0.19.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.19.0
+	metrics/loadwatcher => ../loadwatcher
 )
