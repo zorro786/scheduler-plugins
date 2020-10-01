@@ -49,6 +49,7 @@ As a K8s user, I would like to see more enriched single-level scheduler options 
 ### Notes/Constraints/Caveats
 
 Enabling our plugin(s) will cause conflict with 2 default scoring plugins: “NodeResourcesLeastAllocated” & “NodeResourcesBalancedAllocation” score plugins. So it is strongly advised to disable them.
+For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only.
 
 
 ### Risks and Mitigations
@@ -79,6 +80,7 @@ Load watcher would cache metrics in the last 15-minute, 10-minute, and 5-minute 
 ### DB
 
 This is a localhost database stored as a file. This DB aims to populate the load watcher's cache quickly if it is lost due to a crash and perform scheduling decisions without any impact on latency.
+The file will be stored in host file system, so it will be persisted across pod failures on the same node. For HA setups, each load watcher process will maintain its corresponding file locally.
 
 
 ### Scheduler Plugins
