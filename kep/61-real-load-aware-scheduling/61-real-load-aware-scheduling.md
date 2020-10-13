@@ -3,25 +3,29 @@
 
 ## Summary
 
-Real Load Aware Scheduling minimizes cluster management costs and makes the cluster more efficient in terms of resource (CPU, Memory) utilization.
-
-
+Minimizing machine costs by efficiently utilizing all nodes is the main objective for managing a cluster. To achieve this goal, we can make the Kubernetes scheduler aware of the gap between resource allocation and actual resource utilization. Taking advantage of the gap may help pack pods more efficiently, while the default scheduler that only considers pod requests and allocable resources on nodes cannot.
 ## Motivation
 
-Clusters are inefficient due to a lack of capacity utilization, which leads to increased costs due to more machines, maintenance, etc. The main reason for this is that the default scheduler in K8s doesn’t consider live node utilization values in scheduling decisions, and pod requests are not accurate in practice.
+Kubernetes provides a declarative resource model that core components (scheduler and kubelet) honor to behave consistently and satisfy QoS guarantees.
+However, using this model can lead to low-utilization of the cluster for the following reasons:
 
+1. It is hard for users to estimate accurate resource usage for applications. Also, users may not understand the resource model and not set it at all.
+2. The default in-tree scheduling plugins (Score) that Kubernetes provides don't consider live node utilization values.
+
+This proposal utilizes real time resource usage to schedule pods with proposed plugins. The eventual goal is to increase cluster utilization and decrease costs of cluster management without breaking the contract of Kubernetes Resource Model.
 
 ### Goals
 
-1. Minimize the number of running nodes.
-2. CPU Utilisation per node should not go beyond X%.
+1. Provide configurable scheduling plugins to increase cluster utilization.
+2. Expected CPU Utilisation per node should not go beyond X%.
 3. Instances of an app should spread across failure domains. The failure domain would be host at the lowest level and can extend to racks, zones, regions, etc.
 4. To not affect the behavior of default score plugins unless necessary.
+5. Implement the above features as Score plugins
 
 ### Non-Goals
 
-1. The constraints above are the best effort of soft constraints. They are not hard constraints.
-2. Descheduling or pre-emption due to lousy scheduling decisions is not addressed in the initial design.
+1. Implement the above constraints (2, 3) as filter plugins.
+2. Descheduling due to unexpected outcome (hot nodes, fragmentation etc.) of past scoring by plugins is not addressed in the initial design.
 3. Memory, Network, and Disk utilization are not considered in the initial design.
 
 ## Proposal
@@ -36,20 +40,18 @@ Clusters are inefficient due to a lack of capacity utilization, which leads to i
 As a company relying on the public cloud, we would like to minimize machine costs by efficiently utilizing the nodes leased.
 
 
-#### Story 2
-
 As a company-owned data center, we would like to minimize the hardware and maintenance associated with clusters by getting the maximum possible juice out of existing machines.
 
 
-#### Story 3
+#### Story 2
 
-As a K8s user, I would like to see more enriched single-level scheduler options in the community.
+Increasing resource utilization as much as possible may not be the right solution for all clusters. As it always takes some time to scale up a cluster to handle the sudden spikes of load, cluster admins would like to leave adequate room for the bursty load, so there is enough time to add more nodes to the cluster.
 
 
 ### Notes/Constraints/Caveats
 
-Enabling our plugin(s) will cause conflict with 2 default scoring plugins: “NodeResourcesLeastAllocated” & “NodeResourcesBalancedAllocation” score plugins. So it is strongly advised to disable them.
-For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only.
+Enabling our plugin(s) will cause conflict with 2 default scoring plugins: "NodeResourcesLeastAllocated" and "NodeResourcesBalancedAllocation" score plugins. So it is strongly advised to disable them when enabling plugin(s) mentioned in this proposal.
+For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only. The motivation behind using this plugin is explained under "Spreading with BestFitBinPack".
 
 
 ### Risks and Mitigations
@@ -59,7 +61,7 @@ If utilization metrics are not available for a long time, we will fall back to t
 
 ## Design Details
 
-
+Our design consists of the following components as outlined in the diagram and described below. We propose two plugins namely "BestFitBinPack" and "SafeBalancing". Both of them use metrics from load watcher for scoring nodes with different algorithms.
 
 <img src="images/design.png" alt="design" width="720" height="628"/>
 
@@ -67,14 +69,14 @@ If utilization metrics are not available for a long time, we will fall back to t
 
 ### Metrics Provider
 
-This service provides metrics backed by a time-series database — for example, Prometheus, InfluxDB, etc.
+This service provides metrics backed by a time-series database — for example, Prometheus, InfluxDB, [Kubernetes Metrics Server](https://github.com/kubernetes-sigs/metrics-server) etc.
 
 
 ### Load Watcher/Load Analyser
 
-The load watcher and analyzer both run in a single process. The watcher is responsible for the cluster-wide aggregation of resource usage metrics like CPU, memory, network, and IO stats over windows of a specified duration. It stores these in its local cache and persists several aggregations in the host local DB for fault tolerance. The analyzer is responsible for the detection of bad metrics and any remediation. Bad metrics could be due to missing metrics or metrics with considerable errors, making them anomalies. It can also be extended in the future to use ML models for analyzing metrics.
+The load watcher and analyzer both run in a single process. The watcher is responsible for the retrieving cluster-wide resource usage metrics like CPU, memory, network, and IO stats over windows of a specified duration from metrics providers above. It stores these in its local cache and persists several aggregations in the host local DB for fault tolerance. The analyzer is responsible for the detection of bad metrics and any remediation. Bad metrics could be due to missing metrics or metrics with considerable errors, making them anomalies. It can also be extended in the future to use ML models for analyzing metrics.
 
-Load watcher would cache metrics in the last 15-minute, 10-minute, and 5-minute windows, which can be queried via REST API exposed.
+Load watcher would cache metrics in the last 15-minute, 10-minute, and 5-minute windows, which can be queried via REST API exposed. A generic interface will be provided that can support fetching metrics from any metrics provider. Example is provided in Appendix.
 
 
 ### DB
@@ -88,12 +90,7 @@ The file will be stored in host file system, so it will be persisted across pod 
 This uses the scheduler framework of K8s to incorporate our custom real load aware scheduler plugins without modifying the core scheduler code.
 
 
-### BestFitBinPack Plugins
-
-
-#### PreScore plugin
-
-This extension point which is invoked for all the nodes at once will be used to cache metrics for all nodes using a single REST API  call. This optimization will reduce multiple calls for each node from the Score plugin below, thereby reducing overall scheduling latency.
+### BestFitBinPack Plugin
 
 
 #### Score plugin
@@ -137,7 +134,7 @@ In the algorithm above, 50% is the target utilization rate we want to achieve on
 
 In the 2nd step of the algorithm, one variant uses the current pod's total CPU limits instead of requests, to have a stronger upper bound of expected utilization.
 
-The 50% threshold value for utilisation will be made configurable.
+The 50% threshold value for utilisation will be made configurable via plugin argument.
 
 **Algorithm Analysis**
 
@@ -156,7 +153,13 @@ The above is a plot of the piecewise function outlined in the algorithm. The key
 #### Spreading with BestFitBinPack
 
 
-To meet the 2nd constraint in the problem statement, we utilize the existing PodTopologySpread (PTS) plugin provided by K8s. It was proved with experiments that using a dynamic weight-based approach is not a good idea here. However, if we choose a fixed large weight for PTS, say 100, we can meet our requirements. The problem with this approach is that we will end up downplaying the scores of other important default plugins like Image Locality, Interpod Affinity, etc. with their default weights. Also, with more plugins we plan to add in the future, managing weights will not be simple. So for BFBP to work well with PTS without modifying weights, the following extended algorithm is proposed that is called when scheduling replicas of a service, replica-set, replication controller, etc.
+To meet the 2nd constraint in the problem statement, we utilize the existing PodTopologySpread (PTS) plugin provided by K8s. 
+This is to avoid baking in another spreading algorithm within BFBP when there is an existing in-tree plugin and conflict our 4th goal.  
+It was proved with experiments that using a dynamic weight-based approach (changing weights of PTS and BFBP in every scheduling cycle) is not a good idea, neither it is supported by Kubernetes. 
+However, if we choose a static large weight for PTS, say 100, we can meet our goals. 
+The problem with this approach is that we will end up downplaying the scores of other important default in-tree plugins like Image Locality, Interpod Affinity, etc. with their default weights of 1. 
+Also, with more plugins we plan to add in the future, managing weights will not be simple. So for BFBP to work well with PTS without modifying weights, 
+the following extended algorithm is proposed that is called when scheduling replicas of a service, replica-set, replication controller, etc.
 
 
 **Algorithm**
@@ -189,11 +192,6 @@ Example:
 ### Safe Balancing Plugin
 
 
-#### PreScore plugin
-
-This extension point, which is invoked for all the nodes at once, will be used to cache metrics for all nodes using a single REST API  call. This optimization will reduce multiple calls for each node from the Score plugin below, reducing overall scheduling latency.
-
-
 #### Score plugin
 
 This plugin would extend the Score extension point. K8s scheduler framework calls the Score function for each node separately when scheduling a pod.
@@ -218,7 +216,7 @@ Following is the algorithm:
 3. Calculate the score of the current node for each type of resource: <img src="https://render.githubusercontent.com/render/math?math=S_i = M %2B r %2B V">
 4. Get a score for each type of resource and bound it to [0,1]: <img src="https://render.githubusercontent.com/render/math?math=S_i = \min(S_i, 1.0)">
 5. Calculate the node priority score per resource as: <img src="https://render.githubusercontent.com/render/math?math=U_i = (1 - S_i) \times MaxPriority ">
-6. Get the final node score as: <img src="https://render.githubusercontent.com/render/math?math=U = \min_i(U_i)">
+6. Get the final node score as: <img src="https://render.githubusercontent.com/render/math?math=U = \min(U_i)">
 
 **Example**
 
@@ -414,10 +412,10 @@ Unit tests and Integration tests will be added.
 
 ## **Appendix**
 
-Load Watcher JSON schema
+##### Load Watcher JSON schema
 
 
-```
+```json
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "type": "object",
@@ -538,3 +536,62 @@ Load Watcher JSON schema
     "data"
   ]
 }
+```
+
+##### Load Watcher JSON Example:
+
+```json
+{
+  "timestamp": 1556987522,
+  "window": {
+    "duration" : "15m",
+    "start" : 1556984522,
+    "end"   : 1556985422
+  },
+  "source" : "InfluxDB",
+  "data" :
+    {
+      "node-1" : {
+        "metrics" : [
+          {
+            "name" : "host.cpu.utilisation",
+            "type" : "cpu",
+            "rollup" : "AVG",
+            "value"  : 20
+          },
+          {
+            "name" : "host.memory.utilisation",
+            "type" : "memory",
+            "rollup" : "STD",
+            "value"  : 5
+          }],
+        "tags" : {},
+        "metadata" : {
+          "dataCenter" : "data-center-1",
+          "pool" : "critical-apps"
+        }
+      },
+      "node-2" : {
+        "metrics" : [
+          {
+            "name" : "host.cpu.utilisation",
+            "type"  : "cpu",
+            "rollup" : "AVG",
+            "value"  : 20
+          },
+          {
+            "name" : "host.memory.utilisation",
+            "type" : "memory",
+            "rollup" : "STD",
+            "value"  : 5
+          }
+        ]
+      },
+      "metadata" : {
+        "dataCenter" : "data-center-2",
+        "pool" : "light-apps"
+      },
+      "tags" : {}
+    }
+}
+```
