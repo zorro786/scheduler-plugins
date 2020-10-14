@@ -3,7 +3,8 @@
 
 ## Summary
 
-Minimizing machine costs by efficiently utilizing all nodes is the main objective for managing a cluster. To achieve this goal, we can make the Kubernetes scheduler aware of the gap between resource allocation and actual resource utilization. Taking advantage of the gap may help pack pods more efficiently, while the default scheduler that only considers pod requests and allocable resources on nodes cannot.
+Minimizing machine costs by utilizing all nodes is the main objective for efficient cluster management. To achieve this goal, we can make the Kubernetes scheduler aware of the gap between resource allocation and actual resource utilization. Taking advantage of the gap may help pack pods more efficiently, while the default scheduler that only considers pod requests and allocable resources on nodes cannot.
+
 ## Motivation
 
 Kubernetes provides a declarative resource model that core components (scheduler and kubelet) honor to behave consistently and satisfy QoS guarantees.
@@ -87,7 +88,10 @@ The file will be stored in host file system, so it will be persisted across pod 
 
 ### Scheduler Plugins
 
-This uses the scheduler framework of K8s to incorporate our custom real load aware scheduler plugins without modifying the core scheduler code.
+This uses the scheduler framework of K8s to incorporate our customized real load aware scheduler plugins without modifying the core scheduler code. The plugins we proposed mainly include the following two.
+
+- BestFitBinPack Plugin: It is a node sorting plugin that sorts nodes by their actual resource utilization in a way that all utilized nodes have around x% of utilization. We use x% = 50% below to describe the plugin.
+- Safe Balancing Plugin: It is a node sorting plugin that sorts nodes base on both the mean and the standard deviation of node resource utilization. It aims to balance not only the average load but also the risk caused by load variations.
 
 
 ### BestFitBinPack Plugin
@@ -216,7 +220,7 @@ Following is the algorithm:
 3. Calculate the score of the current node for each type of resource: <img src="https://render.githubusercontent.com/render/math?math=S_i = M %2B r %2B V">
 4. Get a score for each type of resource and bound it to [0,1]: <img src="https://render.githubusercontent.com/render/math?math=S_i = \min(S_i, 1.0)">
 5. Calculate the node priority score per resource as: <img src="https://render.githubusercontent.com/render/math?math=U_i = (1 - S_i) \times MaxPriority ">
-6. Get the final node score as: <img src="https://render.githubusercontent.com/render/math?math=U = \min(U_i)">
+6. Get the final node score as: <img src="https://render.githubusercontent.com/render/math?math=U =\min(U_i)">
 
 **Example**
 
@@ -248,7 +252,14 @@ According to the scores we have, node `N3` will be selected. The utilization fra
 <img src="images/image7.png" alt="after-placement" width="600" height="150"/>
 
 
-If we plot these in mu-sigma plots, we can see the placement automatically pushes the utilization of nodes toward the diagonal line sigma = 1 - mu.
+If we plot these in mu-sigma plots, we can see the placement automatically pushes the utilization of nodes toward the diagonal line sigma = 1 - mu. The 1 here indicates 100% of utilization. What can be configured is a coefficient `ita`, which indicates `mu + ita x sigma <= 100 %` and we choose `ita = 1` here. `ita` here models the confidence of usage not exceeding the node capacity under the assumption that the actual usage follows Gaussian distribution and follows the [68-96-99.5 rule](https://en.wikipedia.org/wiki/68%E2%80%9395%E2%80%9399.7_rule).
+
+So when `ita` gets different values, we get different confidence of not exceeding the capacity.
+
+- `ita = 1`, we have a 68% chance that the actual usage is within the node capacity.
+- `ita = 2`, we have a 95% chance that the actual usage is within the node capacity.
+- `ita = 3`, we have a 99.7% chance that the actual usage is within the node capacity.
+By default, we choose `ita = 1` as we would like to improve the overall utilization.
 
 
 <img src="images/image2.png" alt="mu-sigma-plot" width="580" height="600"/>
