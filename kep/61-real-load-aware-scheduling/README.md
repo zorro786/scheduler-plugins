@@ -25,7 +25,7 @@ This proposal utilizes real time resource usage to schedule pods with proposed p
 
 ### Non-Goals
 
-1. Implement the above constraints (2, 3) as filter plugins.
+1. Implement the above constraints (2, 3) as Filter plugins.
 2. Descheduling due to unexpected outcome (hot nodes, fragmentation etc.) of past scoring by plugins is not addressed in the initial design.
 3. Memory, Network, and Disk utilization are not considered in the initial design.
 
@@ -51,7 +51,7 @@ Increasing resource utilization as much as possible may not be the right solutio
 
 ### Notes/Constraints/Caveats
 
-Enabling our plugin(s) will cause conflict with 2 default scoring plugins: "NodeResourcesLeastAllocated" and "NodeResourcesBalancedAllocation" score plugins. So it is strongly advised to disable them when enabling plugin(s) mentioned in this proposal.
+Enabling our plugin(s) will cause conflict with 2 default scoring plugins: "NodeResourcesLeastAllocated" and "NodeResourcesBalancedAllocation" plugins. So it is strongly advised to disable them when enabling plugin(s) mentioned in this proposal.
 For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only. The motivation behind using this plugin is explained under "Spreading with BestFitBinPack".
 
 
@@ -75,7 +75,7 @@ This service provides metrics backed by a time-series database — for example, 
 
 ### Load Watcher/Load Analyser
 
-The load watcher and analyzer both run in a single process. The watcher is responsible for the retrieving cluster-wide resource usage metrics like CPU, memory, network, and IO stats over windows of a specified duration from metrics providers above. It stores these in its local cache and persists several aggregations in the host local DB for fault tolerance. The analyzer is responsible for the detection of bad metrics and any remediation. Bad metrics could be due to missing metrics or metrics with considerable errors, making them anomalies. It can also be extended in the future to use ML models for analyzing metrics.
+The load watcher and analyzer both run in a single process. The watcher is responsible for retrieving cluster-wide resource usage metrics like CPU, memory, network, and IO stats over windows of a specified duration from metrics providers above. It stores these in its local cache and persists several aggregations in the host local DB for fault tolerance. The analyzer is responsible for the detection of bad metrics and any remediation. Bad metrics could be due to missing metrics or metrics with considerable errors, making them anomalies. It can also be extended in the future to use ML models for analyzing metrics.
 
 Load watcher would cache metrics in the last 15-minute, 10-minute, and 5-minute windows, which can be queried via REST API exposed. A generic interface will be provided that can support fetching metrics from any metrics provider. Example is provided in Appendix.
 
@@ -170,13 +170,13 @@ the following extended algorithm is proposed that is called when scheduling repl
 
 
 
-1. For each node, calculate S = (1000*PTS + PTS*BFBP)
+1. For each node, calculate S = (1000\*PTS + PTS\*BFBP)
 2. Scale each S to be between 0-100
 3. Return the scores
 
 **Algorithm Analysis**
 
-1. The algorithm favors nodes with high PTS scores with 1000*PTS part. The weight 1000 is chosen to give preference to PTS  and to avoid the congestion of scores upon scaling down, my magnifying the scores 
+1. The algorithm favors nodes with high PTS scores with 1000*PTS part. The weight 1000 is chosen to give preference to PTS  and to avoid the congestion of scores upon scaling down, by magnifying the scores 
 2. PTS*BFBP penalizes hot nodes with low BFBP scores.
 3. The final scaled-down value deals with congestion, hot node penalty, and favoring of high PTS score nodes
 
