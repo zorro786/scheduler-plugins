@@ -360,9 +360,9 @@ Returns metrics for the hostname given
 
 
 
-### **PostBind Plugin**
+### **Scheduled Pods State**
 
-A custom plugin will be added at post bind extension point, which maintains a time ordered state of node → pod mappings for pods scheduled successfully in last 5 minutes. This state will be maintained across scheduling cycles and used from BestFitBinPack Score plugin. This state will help to predict utilisation based on allocations when metrics are bad, especially in case 1 above (Unavailability of metrics).
+A controller will be added as a go routine watching events on `.spec.nodeName`. This will maintain a time ordered state of node → pod mappings for pods scheduled successfully in last 5 minutes. This state will be maintained across scheduling cycles and used from BestFitBinPack/SafeScheduling Score plugin. It will help to predict utilisation based on allocations when metrics are bad, especially in case 1 above (Unavailability of metrics).
 
 
 ### **Test Plan**
