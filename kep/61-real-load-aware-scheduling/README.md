@@ -60,6 +60,8 @@ For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to preve
 If utilization metrics are not available for a long time, we will fall back to the best fit bin pack based on allocations. There is no user action needed for this.
 
 
+To achieve X% utilization, it is recommended to set the value as X - 10 in practice. Refer to BestFitBinPack Score Plugin below for more details.
+
 ## Design Details
 
 Our design consists of the following components as outlined in the diagram and described below. We propose two plugins namely "BestFitBinPack" and "SafeBalancing". Both of them use metrics from load watcher for scoring nodes with different algorithms.
@@ -90,7 +92,7 @@ The file will be stored in host file system, so it will be persisted across pod 
 
 This uses the scheduler framework of K8s to incorporate our customized real load aware scheduler plugins without modifying the core scheduler code. The plugins we proposed mainly include the following two.
 
-- BestFitBinPack Plugin: It is a node sorting plugin that sorts nodes by their actual resource utilization in a way that all utilized nodes have around x% of utilization. We use x% = 50% below to describe the plugin.
+- BestFitBinPack Plugin: It is best fit variant of bin pack algorithm that scores nodes by their actual resource utilization in a way that all utilized nodes have around x% of utilization.
 - Safe Balancing Plugin: It is a node sorting plugin that sorts nodes base on both the mean and the standard deviation of node resource utilization. It aims to balance not only the average load but also the risk caused by load variations.
 
 
@@ -108,11 +110,11 @@ Following is the algorithm:
 1. Get the utilization of the current node to be scored. Call it A.
 2. Calculate the current pod's total CPU requests and overhead. Call it B.
 3. Calculate the expected utilization if the pod is scheduled under this node by adding i.e. U = A + B.
-4. If U &lt;= 50%, return U+50 as the score
-5. If 50% &lt; U &lt;= 100%, return 100 - U
+4. If U &lt;= X%, return U+X as the score
+5. If X% &lt; U &lt;= 100%, return 100 - U
 6. If U > 100%, return 0
 
-For example, let’s say we have three nodes X, Y, and Z, with four cores each and utilization 1, 2, and 3 cores respectively. For simplicity, let’s assume our pod to be scheduled has 0 cores CPU requests and overhead.
+For example, let’s say we have three nodes X, Y, and Z, with four cores each and utilization 1, 2, and 3 cores respectively. For simplicity, let’s assume our pod to be scheduled has 0 cores CPU requests and overhead. Let X = 50%.
 
 Utilization of each node:
 
@@ -135,10 +137,11 @@ Z → 75 - 50 = 25
 
 
 In the algorithm above, 50% is the target utilization rate we want to achieve on all nodes. We can be less aggressive by reducing it to 40% so that it has much lesser chances of going over 50% during spikes or unexpected loads. 
+So in general to achieve X% utilisation, X - 10 value of U is recommended.
 
 In the 2nd step of the algorithm, one variant uses the current pod's total CPU limits instead of requests, to have a stronger upper bound of expected utilization.
 
-The 50% threshold value for utilisation will be made configurable via plugin argument.
+The X% threshold value for utilisation will be made configurable via plugin argument.
 
 **Algorithm Analysis**
 
