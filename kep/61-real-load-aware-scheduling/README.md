@@ -52,7 +52,7 @@ Increasing resource utilization as much as possible may not be the right solutio
 ### Notes/Constraints/Caveats
 
 Enabling our plugin(s) will cause conflict with 2 default scoring plugins: "NodeResourcesLeastAllocated" and "NodeResourcesBalancedAllocation" plugins. So it is strongly advised to disable them when enabling plugin(s) mentioned in this proposal.
-For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only. The motivation behind using this plugin is explained under "Spreading with BestFitBinPack".
+For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only, should you choose to use our extended algorithm. The motivation behind using this plugin is explained under "Spreading with BestFitBinPack".
 
 
 ### Risks and Mitigations
@@ -160,13 +160,14 @@ The above is a plot of the piecewise function outlined in the algorithm. The key
 #### Spreading with BestFitBinPack
 
 
-To meet the 2nd constraint in the problem statement, we utilize the existing PodTopologySpread (PTS) plugin provided by K8s. 
+To meet the 3rd goal, we utilize the existing PodTopologySpread (PTS) plugin provided by K8s. 
 This is to avoid baking in another spreading algorithm within BFBP when there is an existing in-tree plugin and conflict our 4th goal.  
 It was proved with experiments that using a dynamic weight-based approach (changing weights of PTS and BFBP in every scheduling cycle) is not a good idea, neither it is supported by Kubernetes. 
-However, if we choose a static large weight for PTS, say 100, we can meet our goals. 
+However, if we choose a static large weight for PTS, we can meet our goals. 
 The problem with this approach is that we will end up downplaying the scores of other important default in-tree plugins like Image Locality, Interpod Affinity, etc. with their default weights of 1. 
 Also, with more plugins we plan to add in the future, managing weights will not be simple. So for BFBP to work well with PTS without modifying weights, 
-the following extended algorithm is proposed that is called when scheduling replicas of a service, replica-set, replication controller, etc.
+the following extended algorithm is proposed that is called when scheduling replicas of a service, replica-set, replication controller, etc. This extended algorithm would be configurable to turn off
+and use static weights instead for PTS score plugin.
 
 
 **Algorithm**
@@ -179,7 +180,7 @@ the following extended algorithm is proposed that is called when scheduling repl
 
 **Algorithm Analysis**
 
-1. The algorithm favors nodes with high PTS scores with 1000*PTS part. The weight 1000 is chosen to give preference to PTS  and to avoid the congestion of scores upon scaling down, by magnifying the scores 
+1. The algorithm favors nodes with high PTS scores with 1000*PTS part. The weight 1000 is chosen to give preference to PTS and to avoid the congestion of scores upon scaling down, by magnifying the scores 
 2. PTS*BFBP penalizes hot nodes with low BFBP scores.
 3. The final scaled-down value deals with congestion, hot node penalty, and favoring of high PTS score nodes
 
