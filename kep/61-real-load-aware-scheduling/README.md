@@ -18,10 +18,9 @@ This proposal utilizes real time resource usage to schedule pods with proposed p
 ### Goals
 
 1. Provide configurable scheduling plugins to increase cluster utilization.
-2. Expected CPU Utilisation per node should not go beyond X%.
-3. Instances of an app should spread across failure domains. The failure domain would be host at the lowest level and can extend to racks, zones, regions, etc.
-4. To not affect the behavior of default score plugins unless necessary.
-5. Implement the above features as Score plugins
+2. Expected CPU Utilisation per node should not go beyond X% (constraint).
+3. To not affect the behavior of default score plugins unless necessary.
+4. Implement the above features as Score plugins
 
 ### Non-Goals
 
@@ -52,7 +51,7 @@ Increasing resource utilization as much as possible may not be the right solutio
 ### Notes/Constraints/Caveats
 
 Enabling our plugin(s) will cause conflict with 2 default scoring plugins: "NodeResourcesLeastAllocated" and "NodeResourcesBalancedAllocation" plugins. So it is strongly advised to disable them when enabling plugin(s) mentioned in this proposal.
-For the 3rd Goal, since we utilise PodTopologySpread plugin scoring and to prevent double scoring, it is recommended to disable "PodTopologySpread" Score plugin only, should you choose to use our extended algorithm. The motivation behind using this plugin is explained under "Spreading with BestFitBinPack".
+If you choose to enable "NodeResourcesMostAllocated" in tree plugin which is not enabled by default, then it would conflict with our scoring too.
 
 
 ### Risks and Mitigations
@@ -156,45 +155,6 @@ The above is a plot of the piecewise function outlined in the algorithm. The key
 2. The nodes are penalized linearly as the utilization goes beyond 50%, to spread the pod amongst those "hot" nodes.
 3. The positive slope begins from 50 and not from 0 because the range of score is from 0-100, and we want to maximize our score output for nodes we wish to favor so that the score is more substantial and other plugins do not affect it much.
 4. There is a break in the graph with a high drop due to the "penalty" we have.
-
-#### Spreading with BestFitBinPack
-
-
-To meet the 3rd goal, we utilize the existing PodTopologySpread (PTS) plugin provided by K8s. 
-This is to avoid baking in another spreading algorithm within BFBP when there is an existing in-tree plugin and conflict our 4th goal.  
-It was proved with experiments that using a dynamic weight-based approach (changing weights of PTS and BFBP in every scheduling cycle) is not a good idea, neither it is supported by Kubernetes. 
-However, if we choose a static large weight for PTS, we can meet our goals. 
-The problem with this approach is that we will end up downplaying the scores of other important default in-tree plugins like Image Locality, Interpod Affinity, etc. with their default weights of 1. 
-Also, with more plugins we plan to add in the future, managing weights will not be simple. So for BFBP to work well with PTS without modifying weights, 
-the following extended algorithm is proposed that is called when scheduling replicas of a service, replica-set, replication controller, etc. This extended algorithm would be configurable to turn off
-and use static weights instead for PTS score plugin.
-
-
-**Algorithm**
-
-
-
-1. For each node, calculate S = (1000\*PTS + PTS\*BFBP)
-2. Scale each S to be between 0-100
-3. Return the scores
-
-**Algorithm Analysis**
-
-1. The algorithm favors nodes with high PTS scores with 1000*PTS part. The weight 1000 is chosen to give preference to PTS and to avoid the congestion of scores upon scaling down, by magnifying the scores 
-2. PTS*BFBP penalizes hot nodes with low BFBP scores.
-3. The final scaled-down value deals with congestion, hot node penalty, and favoring of high PTS score nodes
-
-Example: 
-
-
-| Node | PTS | BFBP | Combined Score |
-|------|-----|------|----------------|
-|  N1  | 100 |  35  |       96       |
-|  N2  |  67 |  75  |       67       |
-|  N3  | 100 |  80  |       100      |
-|  N4  |  82 |  90  |       83       |
-|  N5  |  0  |  90  |        0       |
-
 
 
 ### Safe Balancing Plugin
