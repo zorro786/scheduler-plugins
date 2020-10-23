@@ -1,4 +1,4 @@
-# KEP - Real Load Aware Scheduling
+# KEP - Trimaran: Real Load Aware Scheduling
 
 
 ## Summary
@@ -57,9 +57,9 @@ If you choose to enable "NodeResourcesMostAllocated" in tree plugin which is not
 ### Risks and Mitigations
 
 If utilization metrics are not available for a long time, we will fall back to the best fit bin pack based on allocations. There is no user action needed for this.
-
-
 To achieve X% utilization, it is recommended to set the value as X - 10 in practice. Refer to BestFitBinPack Score Plugin below for more details.
+For more details on risks and mitigations associated with live metrics, refer to "Bad Metrics".
+
 
 ## Design Details
 
@@ -109,8 +109,8 @@ Following is the algorithm:
 1. Get the utilization of the current node to be scored. Call it A.
 2. Calculate the current pod's total CPU requests and overhead. Call it B.
 3. Calculate the expected utilization if the pod is scheduled under this node by adding i.e. U = A + B.
-4. If U &lt;= X%, return U+X as the score
-5. If X% &lt; U &lt;= 100%, return 100 - U
+4. If U &lt;= X%, return (100 - X)U/X + X as the score
+5. If X% &lt; U &lt;= 100%, return 50U/(X - 100) - 5000/(X - 100)
 6. If U > 100%, return 0
 
 For example, let’s say we have three nodes X, Y, and Z, with four cores each and utilization 1, 2, and 3 cores respectively. For simplicity, let’s assume our pod to be scheduled has 0 cores CPU requests and overhead. Let X = 50%.
@@ -129,14 +129,14 @@ The score of each node :
 
 
 ```
-X → 50 + 25 =  75
-Y → 50 + 50 = 100
-Z → 75 - 50 = 25
+X → (100 - 50)*25/50 + 50 =  75
+Y → (100 - 50)*50/50 + 50 = 100
+Z → 50 * 75/(50 - 100) - 5000/(50 - 100) = 25
 ```
 
 
 In the algorithm above, 50% is the target utilization rate we want to achieve on all nodes. We can be less aggressive by reducing it to 40% so that it has much lesser chances of going over 50% during spikes or unexpected loads. 
-So in general to achieve X% utilisation, X - 10 value of U is recommended.
+So in general to achieve X% utilisation, X - 10 value is recommended in practice.
 
 In the 2nd step of the algorithm, one variant uses the current pod's total CPU limits instead of requests, to have a stronger upper bound of expected utilization.
 
@@ -155,6 +155,14 @@ The above is a plot of the piecewise function outlined in the algorithm. The key
 2. The nodes are penalized linearly as the utilization goes beyond 50%, to spread the pod amongst those "hot" nodes.
 3. The positive slope begins from 50 and not from 0 because the range of score is from 0-100, and we want to maximize our score output for nodes we wish to favor so that the score is more substantial and other plugins do not affect it much.
 4. There is a break in the graph with a high drop due to the "penalty" we have.
+
+**Plugin Config Args**
+```go
+type PluginArgs struct {
+    TargetCPUUtilisation    int
+    DefaultCPURequests      int
+}
+```
 
 
 ### Safe Balancing Plugin
@@ -236,8 +244,8 @@ Since load watcher is a major component needed by the plugin to find out utiliza
 
 1. Unavailability of metrics: Metrics can be unavailable due to: 
     1. Short inter-arrival times of pods: In this case, we predict utilization for the recent pods that got scheduled on the node based on its request values and a multiplier, and add it to the current utilization. If the pods belong to best-effort QoS, i.e. don't have requests, we assume a number like 1 milicore which is configurable.
-    2. Failure of Metric reporting agent running in node: In this case, the metrics would be missing for a particular time. We can use the lastest available utilization window (not older than 5 minutes) along with predicted utilization of pods scheduled on that node after the window end time.
-    3. Metrics Provider failure: The metrics provider can fail to serve requests for several reasons like OOM, unresponsive components, etc. In this case, every node’s metrics are unavailable, and we fall back to the best fit based on allocations. 
+    2. Failure of Metric reporting agent running in node: In this case, the metrics would be missing for a particular time. We can use the latest available utilization window (not older than 5 minutes) along with predicted utilization of pods scheduled on that node after the window end time. If this is not available we avoid the node by scoring it minimum.
+    3. Metrics Provider failure: The metrics provider can fail to serve requests for several reasons like OOM, unresponsive components, etc. In this case, every node’s metrics are unavailable, and we fall back to the best fit based on allocations. However, we do not plan to target the fall back in first implementation.
     4. Addition of new nodes: It is easy to handle this if no pods have been scheduled on them, so utilization must be 0. If any recent new pods are running already then we can use the method above for prediction. If there are long-running pods, we can avoid this node until metrics are available.
 2. Incorrect metrics (due to misconfiguration, bugs, etc.): It is challenging to detect such metrics. For the first implementation, we would like to ignore this case by assuming metrics are correct. However, we plan to add metrics from multiple providers to corroborate data points and minimize the effect of incorrect metrics on scheduling in the future. 
 
