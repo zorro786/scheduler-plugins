@@ -228,10 +228,18 @@ If we plot these in mu-sigma plots, we can see the placement automatically pushe
 
 So when `ita` gets different values, we get different confidence of not exceeding the capacity.
 
-- `ita = 1`, we have a 68% chance that the actual usage is within the node capacity.
-- `ita = 2`, we have a 95% chance that the actual usage is within the node capacity.
-- `ita = 3`, we have a 99.7% chance that the actual usage is within the node capacity.
-By default, we choose `ita = 1` as we would like to improve the overall utilization.
+- `ita = 1`, we have a 16% risk that the actual usage exceeds the node capacity.
+- `ita = 2`, we have a 2.5% chance that the actual usage exceeds the node capacity.
+- `ita = 3`, we have a 0.15% chance that the actual usage exceeds the node capacity.
+By default, we choose `ita = 1` as we would like to improve the overall utilization. `ita` can be configured via the `SafeVarianceMargin` for the plugin.
+
+
+**Plugin Config Args**
+```go
+type PluginArgs struct {
+    SafeVarianceMargin    int
+}
+```
 
 
 <img src="images/image2.png" alt="mu-sigma-plot" width="580" height="600"/>
