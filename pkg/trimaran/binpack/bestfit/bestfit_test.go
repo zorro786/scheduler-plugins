@@ -19,7 +19,11 @@ package bestfit
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 	"log"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -44,8 +48,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
-	configv1beta1 "sigs.k8s.io/scheduler-plugins/pkg/apis/config/v1beta1"
-
+	pluginConfig "sigs.k8s.io/scheduler-plugins/pkg/apis/config"
 )
 
 var _ framework.SharedLister = &testSharedLister{}
@@ -118,9 +121,7 @@ func TestBestFitScoring(t *testing.T) {
 			},
 			watcherResponse: watcher.WatcherMetrics{
 				Window: watcher.Window{},
-				Data: struct {
-					NodeMetricsMap map[string]watcher.NodeMetrics
-				}{
+				Data: watcher.Data{
 					NodeMetricsMap: map[string]watcher.NodeMetrics{
 						"node-1": {
 							Metrics: []watcher.Metrics{
@@ -146,10 +147,8 @@ func TestBestFitScoring(t *testing.T) {
 			},
 			watcherResponse: watcher.WatcherMetrics{
 				Window: watcher.Window{},
-				Data: struct {
-					NodeMetricsMap map[string]watcher.NodeMetrics
-				}{
-					NodeMetricsMap: map[string]watcher.NodeMetrics{
+				Data: watcher.Data {
+					NodeMetricsMap:  map[string]watcher.NodeMetrics{
 						"node-1": {
 							Metrics: []watcher.Metrics{
 								{
@@ -173,9 +172,7 @@ func TestBestFitScoring(t *testing.T) {
 			},
 			watcherResponse: watcher.WatcherMetrics{
 				Window: watcher.Window{},
-				Data: struct {
-					NodeMetricsMap map[string]watcher.NodeMetrics
-				}{
+				Data: watcher.Data {
 					NodeMetricsMap: map[string]watcher.NodeMetrics{
 						"node-1": {
 							Metrics: []watcher.Metrics{
@@ -193,31 +190,14 @@ func TestBestFitScoring(t *testing.T) {
 			},
 		},
 		{
-			test: "hot node",
+			test: "404 resp from watcher",
 			pod:  st.MakePod().Name("p").Obj(),
 			nodes: []*v1.Node{
-
 				st.MakeNode().Name("node-1").Capacity(nodeResources).Obj(),
 			},
-			watcherResponse: watcher.WatcherMetrics{
-				Window: watcher.Window{},
-				Data: struct {
-					NodeMetricsMap map[string]watcher.NodeMetrics
-				}{
-					NodeMetricsMap: map[string]watcher.NodeMetrics{
-						"node-1": {
-							Metrics: []watcher.Metrics{
-								{
-									Type:  watcher.CPU,
-									Value: hostCPUThresholdPercent + 10,
-								},
-							},
-						},
-					},
-				},
-			},
+			watcherResponse: watcher.WatcherMetrics{},
 			expected: []framework.NodeScore{
-				{Name: "node-1", Score: 100 - hostCPUThresholdPercent - 10},
+				{Name: "node-1", Score: framework.MinNodeScore},
 			},
 		},
 	}
@@ -230,8 +210,8 @@ func TestBestFitScoring(t *testing.T) {
 				resp.Write(bytes)
 			}))
 			// point watcher to test server
-			watcherHostName = server.URL
-			watcherBaseUrl = ""
+			WatcherHostName = server.URL
+			WatcherBaseUrl = ""
 
 			defer server.Close()
 
@@ -245,10 +225,7 @@ func TestBestFitScoring(t *testing.T) {
 				runtime.WithInformerFactory(informerFactory), runtime.WithSnapshotSharedLister(snapshot))
 			assert.Nil(t, err)
 			p, err := New(nil, fh)
-			preScorePlugin := (p.(framework.PreScorePlugin))
-			status := preScorePlugin.PreScore(context.Background(), state, tt.pod, nodes)
-			assert.True(t, status.IsSuccess())
-			scorePlugin := (p.(framework.ScorePlugin))
+			scorePlugin := p.(framework.ScorePlugin)
 			var actualList framework.NodeScoreList
 			for _, n := range tt.nodes {
 				nodeName := n.Name
@@ -293,9 +270,7 @@ func TestExtendedBestFitScoring(t *testing.T) {
 			},
 			watcherResponse: watcher.WatcherMetrics{
 				Window: watcher.Window{},
-				Data: struct {
-					NodeMetricsMap map[string]watcher.NodeMetrics
-				}{
+				Data: watcher.Data {
 					NodeMetricsMap: map[string]watcher.NodeMetrics{
 						"node-1": {
 							Metrics: []watcher.Metrics{
@@ -326,9 +301,7 @@ func TestExtendedBestFitScoring(t *testing.T) {
 			},
 			watcherResponse: watcher.WatcherMetrics{
 				Window: watcher.Window{},
-				Data: struct {
-					NodeMetricsMap map[string]watcher.NodeMetrics
-				}{
+				Data: watcher.Data{
 					NodeMetricsMap: map[string]watcher.NodeMetrics{
 						"node-1": {
 							Metrics: []watcher.Metrics{
@@ -369,7 +342,7 @@ func TestExtendedBestFitScoring(t *testing.T) {
 		&appsv1.ReplicaSet{Spec: appsv1.ReplicaSetSpec{Selector: st.MakeLabelSelector().Exists("pool").Obj()}},
 	}
 
-	bfbpArgs := configv1beta1.BestFitBinPackArgs{
+	bfbpArgs := pluginConfig.BestFitBinPackArgs{
 		PTSArgs: config.PodTopologySpreadArgs{
 			TypeMeta:           metav1.TypeMeta{},
 			DefaultConstraints: defaultConstraints,
@@ -393,26 +366,23 @@ func TestExtendedBestFitScoring(t *testing.T) {
 
 			informerFactory.Start(context.Background().Done())
 			informerFactory.WaitForCacheSync(context.Background().Done())
-			preScorePlugin := (pl.(framework.PreScorePlugin))
 
 			ptsPl, err := podtopologyspread.New(&bfbpArgs.PTSArgs, fh)
 			assert.Nil(t, err)
-			ptsPreScorePlugin := (ptsPl.(framework.PreScorePlugin))
+			ptsPreScorePlugin := ptsPl.(framework.PreScorePlugin)
 			server := httptest.NewServer(http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 				bytes, err := json.Marshal(tt.watcherResponse)
 				assert.Nil(t, err)
 				resp.Write(bytes)
 			}))
 			// point watcher to test server
-			watcherHostName = server.URL
-			watcherBaseUrl = ""
+			WatcherHostName = server.URL
+			WatcherBaseUrl = ""
 
 			defer server.Close()
 			status := ptsPreScorePlugin.PreScore(context.Background(), state, tt.pod, nodes)
 			assert.True(t, status.IsSuccess())
-			status = preScorePlugin.PreScore(context.Background(), state, tt.pod, nodes)
-			assert.True(t, status.IsSuccess())
-			scorePlugin := (pl.(framework.ScorePlugin))
+			scorePlugin := pl.(framework.ScorePlugin)
 			var actualList framework.NodeScoreList
 			for _, n := range tt.nodes {
 				nodeName := n.Name
@@ -448,7 +418,7 @@ func TestBestFitPostBindAndCacheCleanup(t *testing.T) {
 
 	pod4 := st.MakePod().Name("pod4-4").Obj()
 	b.PostBind(context.Background(), framework.NewCycleState(), pod4, testNode)
-	b.cleanupCaches()
+	b.cleanupCache()
 	assert.NotNil(t, b.scheduledPodsCache[testNode])
 	assert.Equal(t, 1, len(b.scheduledPodsCache[testNode]))
 	assert.Equal(t, pod4, b.scheduledPodsCache[testNode][0].pod)
@@ -458,7 +428,7 @@ func TestBestFitPostBindAndCacheCleanup(t *testing.T) {
 		podInfo{pod: pod3}, podInfo{timestamp: time.Now().Unix(), pod: pod4})
 	pod5 := st.MakePod().Name("pod-5").Obj()
 	b.PostBind(context.Background(), framework.NewCycleState(), pod5, testNode)
-	b.cleanupCaches()
+	b.cleanupCache()
 	assert.NotNil(t, b.scheduledPodsCache[testNode])
 	assert.Equal(t, 2, len(b.scheduledPodsCache[testNode]))
 	assert.Equal(t, pod4, b.scheduledPodsCache[testNode][0].pod)
@@ -466,11 +436,145 @@ func TestBestFitPostBindAndCacheCleanup(t *testing.T) {
 
 	b.scheduledPodsCache[testNode] = nil
 	b.PostBind(context.Background(), framework.NewCycleState(), pod5, testNode)
-	b.cleanupCaches()
+	b.cleanupCache()
 	assert.NotNil(t, b.scheduledPodsCache[testNode])
 	assert.Equal(t, 1, len(b.scheduledPodsCache[testNode]))
 	assert.Equal(t, pod5, b.scheduledPodsCache[testNode][0].pod)
+}
 
+func BenchmarkTestBestFitPlugins(b *testing.B) {
+	tests := []struct {
+		name     string
+		podsNum  int64
+		nodesNum int64
+	}{
+		{
+			name:     "100nodes",
+			podsNum:  1000,
+			nodesNum: 100,
+		},
+		{
+			name:     "1000nodes",
+			podsNum:  10000,
+			nodesNum: 1000,
+		},
+		{
+			name:     "5000nodes",
+			podsNum:  30000,
+			nodesNum: 5000,
+		},
+	}
+
+	registeredPlugins := []st.RegisterPluginFunc{
+		st.RegisterBindPlugin(defaultbinder.Name, defaultbinder.New),
+		st.RegisterQueueSortPlugin(queuesort.Name, queuesort.New),
+		st.RegisterPreFilterPlugin(podtopologyspread.Name, podtopologyspread.New),
+		st.RegisterFilterPlugin(podtopologyspread.Name, podtopologyspread.New),
+		st.RegisterPreScorePlugin(podtopologyspread.Name, podtopologyspread.New),
+		st.RegisterScorePlugin(Name, New, 1),
+		st.RegisterPluginAsExtensions(Name, New, "PostBind"),
+	}
+
+	defaultConstraints := []v1.TopologySpreadConstraint{
+		{MaxSkew: 1, TopologyKey: v1.LabelHostname, WhenUnsatisfiable: v1.ScheduleAnyway},
+	}
+
+	bfbpArgs := pluginConfig.BestFitBinPackArgs{
+		PTSArgs: config.PodTopologySpreadArgs{
+			TypeMeta:           metav1.TypeMeta{},
+			DefaultConstraints: defaultConstraints,
+		},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			pod := st.MakePod().Name("p").Label("foo", "").Obj()
+			state := framework.NewCycleState()
+
+			cs := testClientSet.NewSimpleClientset()
+			informerFactory := informers.NewSharedInformerFactory(cs, 0)
+			nodes := getNodes(tt.nodesNum)
+			snapshot := newTestSharedLister(nil, nodes)
+
+			nodeMetricsMap := make(map[string]watcher.NodeMetrics)
+			nodeMetrics := watcher.NodeMetrics{
+				Metrics: []watcher.Metrics{
+					{
+						Type:  watcher.CPU,
+						Value: 0,
+					},
+				},
+			}
+			for _, node := range nodes {
+				nodeMetricsMap[node.Name] = nodeMetrics
+			}
+			watcherResponse := watcher.WatcherMetrics{
+				Window: watcher.Window{},
+				Data: watcher.Data {
+					NodeMetricsMap: nodeMetricsMap,
+				},
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+				bytes, err := json.Marshal(watcherResponse)
+				if err != nil {
+					klog.Fatalf("Error marshalling watcher response: %v", err)
+				}
+				resp.Write(bytes)
+			}))
+			// point watcher to test server
+			WatcherHostName = server.URL
+			WatcherBaseUrl = ""
+			defer server.Close()
+
+			fh, err := st.NewFramework(registeredPlugins, runtime.WithClientSet(cs),
+				runtime.WithInformerFactory(informerFactory), runtime.WithSnapshotSharedLister(snapshot))
+			assert.Nil(b, err)
+			pl, err := New(&bfbpArgs, fh)
+			assert.Nil(b, err)
+			scorePlugin := pl.(framework.ScorePlugin)
+			postBindPlugin := pl.(framework.PostBindPlugin)
+			informerFactory.Start(context.Background().Done())
+			informerFactory.WaitForCacheSync(context.Background().Done())
+
+			ctx := context.Background()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				gotList := make(framework.NodeScoreList, len(nodes))
+				scoreNode := func(i int) {
+					n := nodes[i]
+					score, _ := scorePlugin.Score(ctx, state, pod, n.Name)
+					gotList[i] = framework.NodeScore{Name: n.Name, Score: score}
+				}
+				Until(ctx, len(nodes), scoreNode)
+				status := (scorePlugin.(framework.ScoreExtensions)).NormalizeScore(ctx, state, pod, gotList)
+				assert.True(b, status.IsSuccess())
+				postBindPlugin.PostBind(ctx, state, pod, pod.Spec.NodeName)
+			}
+		})
+	}
+}
+
+const parallelism = 16
+
+// Copied from k8s internal
+// chunkSizeFor returns a chunk size for the given number of items to use for
+// parallel work. The size aims to produce good CPU utilization.
+func chunkSizeFor(n int) workqueue.Options {
+	s := int(math.Sqrt(float64(n)))
+	if r := n/parallelism + 1; s > r {
+		s = r
+	} else if s < 1 {
+		s = 1
+	}
+	return workqueue.WithChunkSize(s)
+}
+
+// Copied from k8s internal
+// Until is a wrapper around workqueue.ParallelizeUntil to use in scheduling algorithms.
+func Until(ctx context.Context, pieces int, doWorkPiece workqueue.DoWorkPieceFunc) {
+	workqueue.ParallelizeUntil(ctx, parallelism, pieces, doWorkPiece, chunkSizeFor(pieces))
 }
 
 func newTestSharedLister(pods []*v1.Pod, nodes []*v1.Node) *testSharedLister {
@@ -509,6 +613,7 @@ func getPodWithContainersAndOverhead(overhead int64, requests ...int64) *v1.Pod 
 	newPod.Spec.Overhead = make(map[v1.ResourceName]resource.Quantity)
 	newPod.Spec.Overhead[v1.ResourceCPU] = *resource.NewMilliQuantity(overhead, resource.DecimalSI)
 
+
 	for i := 0; i < len(requests); i++ {
 		newPod.Container("test-container-" + strconv.Itoa(i))
 	}
@@ -519,4 +624,16 @@ func getPodWithContainersAndOverhead(overhead int64, requests ...int64) *v1.Pod 
 		newPod.Spec.Containers[i].Resources.Limits[v1.ResourceCPU] = *resource.NewMilliQuantity(request, resource.DecimalSI)
 	}
 	return newPod.Obj()
+}
+
+func getNodes(nodesNum int64) (nodes []*v1.Node) {
+	nodeResources := map[v1.ResourceName]string{
+		v1.ResourceCPU:    "64000m",
+		v1.ResourceMemory: "346Gi",
+	}
+	var i int64
+	for i = 0; i < nodesNum; i++ {
+		nodes = append(nodes, st.MakeNode().Name(fmt.Sprintf("node-%v", i)).Capacity(nodeResources).Obj())
+	}
+	return
 }

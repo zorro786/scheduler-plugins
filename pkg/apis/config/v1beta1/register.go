@@ -40,6 +40,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&CoschedulingArgs{},
 		&NodeResourcesAllocatableArgs{},
 		&CapacitySchedulingArgs{},
+		//&BestFitBinPackArgs{},
 	)
 	return nil
 }

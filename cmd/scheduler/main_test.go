@@ -24,6 +24,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sigs.k8s.io/scheduler-plugins/pkg/trimaran/binpack/bestfit"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -230,6 +231,65 @@ profiles:
 		t.Fatal(err)
 	}
 
+	// BestFitBinPack plugin config
+	bestFitBinPackConfigFile := filepath.Join(tmpDir, "nodeResourcesAllocatable.yaml")
+	if err := ioutil.WriteFile(bestFitBinPackConfigFile, []byte(fmt.Sprintf(`
+apiVersion: kubescheduler.config.k8s.io/v1beta1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: "%s"
+profiles:
+- plugins:
+    preScore:
+      enabled:
+      - name: BestFitBinPack
+      disabled:
+      - name: "*"
+    score:
+      enabled:
+      - name: BestFitBinPack
+      disabled:
+      - name: "*"
+    postBind:
+      enabled:
+      - name: BestFitBinPack
+`, configKubeconfig)), os.FileMode(0600)); err != nil {
+		t.Fatal(err)
+	}
+
+	// BestFitBinPack plugin config with arguments
+	bestFitBinPackConfigWithArgsFile := filepath.Join(tmpDir, "nodeResourcesAllocatable-with-args.yaml")
+	if err := ioutil.WriteFile(bestFitBinPackConfigWithArgsFile, []byte(fmt.Sprintf(`
+apiVersion: kubescheduler.config.k8s.io/v1beta1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: "%s"
+profiles:
+- plugins:
+    preScore:
+      enabled:
+      - name: BestFitBinPack
+      disabled:
+      - name: "*"
+    score:
+      enabled:
+      - name: BestFitBinPack
+      disabled:
+      - name: "*"
+    postBind:
+      enabled:
+      - name: BestFitBinPack
+  pluginConfig:
+  - name: BestFitBinPack
+    args:
+      defaultConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+`, configKubeconfig)), os.FileMode(0600)); err != nil {
+		t.Fatal(err)
+	}
+
 	// multiple profiles config
 	multiProfilesConfig := filepath.Join(tmpDir, "multi-profiles.yaml")
 	if err := ioutil.WriteFile(multiProfilesConfig, []byte(fmt.Sprintf(`
@@ -407,6 +467,44 @@ profiles:
 					"QueueSortPlugin":  defaultPlugins["QueueSortPlugin"],
 					"ReservePlugin":    {{Name: "VolumeBinding"}},
 					"ScorePlugin":      {{Name: "NodeResourcesAllocatable", Weight: 1}},
+				},
+			},
+		},
+		{
+			name:            "single profile config - BestFitBinPack",
+			flags:           []string{"--config", bestFitBinPackConfigFile},
+			registryOptions: []app.Option{app.WithPlugin(bestfit.Name, bestfit.New)},
+			wantPlugins: map[string]map[string][]kubeschedulerconfig.Plugin{
+				"default-scheduler": {
+					"BindPlugin":       {{Name: "DefaultBinder"}},
+					"FilterPlugin":     defaultPlugins["FilterPlugin"],
+					"PostFilterPlugin": {{Name: "DefaultPreemption"}},
+					"PreBindPlugin":    {{Name: "VolumeBinding"}},
+					"PostBindPlugin":	{{Name: bestfit.Name}},
+					"PreFilterPlugin":  defaultPlugins["PreFilterPlugin"],
+					"PreScorePlugin":   {{Name: bestfit.Name}},
+					"QueueSortPlugin":  defaultPlugins["QueueSortPlugin"],
+					"ReservePlugin":    {{Name: "VolumeBinding"}},
+					"ScorePlugin":      {{Name: bestfit.Name, Weight: 1}},
+				},
+			},
+		},
+		{
+			name:            "single profile config - BestFitBinPack with args",
+			flags:           []string{"--config", bestFitBinPackConfigWithArgsFile},
+			registryOptions: []app.Option{app.WithPlugin(bestfit.Name, bestfit.New)},
+			wantPlugins: map[string]map[string][]kubeschedulerconfig.Plugin{
+				"default-scheduler": {
+					"BindPlugin":       {{Name: "DefaultBinder"}},
+					"FilterPlugin":     defaultPlugins["FilterPlugin"],
+					"PostFilterPlugin": {{Name: "DefaultPreemption"}},
+					"PreBindPlugin":    {{Name: "VolumeBinding"}},
+					"PostBindPlugin":	{{Name: bestfit.Name}},
+					"PreFilterPlugin":  defaultPlugins["PreFilterPlugin"],
+					"PreScorePlugin":   {{Name: bestfit.Name}},
+					"QueueSortPlugin":  defaultPlugins["QueueSortPlugin"],
+					"ReservePlugin":    {{Name: "VolumeBinding"}},
+					"ScorePlugin":      {{Name: bestfit.Name, Weight: 1}},
 				},
 			},
 		},
