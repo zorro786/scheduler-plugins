@@ -63,7 +63,7 @@ For more details on risks and mitigations associated with live metrics, refer to
 
 ## Design Details
 
-Our design consists of the following components as outlined in the diagram and described below. We propose two plugins namely "TargetLoadPacking" and "SafeBalancing". Both of them use metrics from load watcher for scoring nodes with different algorithms.
+Our design consists of the following components as outlined in the diagram and described below. We propose two plugins namely "TargetLoadPacking" and "LoadVariationRiskBalancing". Both of them use metrics from load watcher for scoring nodes with different algorithms.
 
 <img src="images/design.png" alt="design" width="720" height="628"/>
 
@@ -342,7 +342,7 @@ Returns metrics for the hostname given
 
 ### **Scheduled Pods State**
 
-A controller will be added as a go routine watching events on `.spec.nodeName`. This will maintain a time ordered state of node → pod mappings for pods scheduled successfully in last 5 minutes. This state will be maintained across scheduling cycles and used from TargetLoadPacking/SafeScheduling Score plugin. It will help to predict utilisation based on allocations when metrics are bad, especially in case 1 above (Unavailability of metrics).
+A controller will be added as a go routine watching events on `.spec.nodeName`. This will maintain a time ordered state of node → pod mappings for pods scheduled successfully in last 5 minutes. This state will be maintained across scheduling cycles and used from TargetLoadPacking/LoadVariationRiskBalancing Score plugin. It will help to predict utilisation based on allocations when metrics are bad, especially in case 1 above (Unavailability of metrics).
 
 
 ### **Test Plan**
