@@ -92,7 +92,7 @@ The file will be stored in host file system, so it will be persisted across pod 
 This uses the scheduler framework of K8s to incorporate our customized real load aware scheduler plugins without modifying the core scheduler code. The plugins we proposed mainly include the following two.
 
 - TargetLoadPacking Plugin: It is best fit variant of bin pack algorithm that scores nodes by their actual resource utilization in a way that all utilized nodes have around x% of utilization. Once all nodes reach x% utilization it moves to least fit variant.
-- Safe Balancing Plugin: It is a node sorting plugin that sorts nodes base on both the mean and the standard deviation of node resource utilization. It aims to balance not only the average load but also the risk caused by load variations.
+- LoadVariationRiskBalancing Plugin: It is a node sorting plugin that sorts nodes base on both the mean and the standard deviation of node resource utilization. It aims to balance not only the average load but also the risk caused by load variations.
 
 
 ### TargetLoadPacking Plugin
@@ -165,7 +165,7 @@ type PluginArgs struct {
 ```
 
 
-### Safe Balancing Plugin
+### LoadVariationRiskBalancing Plugin
 
 
 #### Score plugin
@@ -176,7 +176,7 @@ This plugin would extend the Score extension point. K8s scheduler framework call
 **Idea**
 
 
-Balancing load based on average would be risky sometimes, as it does not consider the bursty variations. A safe balancing plugin balances not only the average load but also the risk caused by load variations. Suppose we take the mean (M) and standard deviation (V) of all nodes’ utilization into a mu-sigma plot below. In that case, the safe balancing plugin will make placements such that all nodes’ utilization are aligned on the diagonal line, which is V + M = c. Here, c is a constant indicating the overall cluster utilization average plus the standard deviation. In summary, considering load on all nodes fluctuates dynamically over time, the safe balancing plugin favors nodes with lower risks of the load exceeding capacity.
+Balancing load based on average would be risky sometimes, as it does not consider the bursty variations. A `LoadVariationRiskBalancing` plugin balances not only the average load but also the risk caused by load variations. Suppose we take the mean (M) and standard deviation (V) of all nodes’ utilization into a mu-sigma plot below. In that case, the `LoadVariationRiskBalancing` plugin will make placements such that all nodes’ utilization are aligned on the diagonal line, which is V + M = c. Here, c is a constant indicating the overall cluster utilization average plus the standard deviation. In summary, considering load on all nodes fluctuates dynamically over time, the `LoadVariationRiskBalancing` plugin favors nodes with lower risks of the load exceeding capacity.
 
 <img src="images/safe-sched-graph.png" alt="safe-sched-graph" width="700" height="400"/>
 
