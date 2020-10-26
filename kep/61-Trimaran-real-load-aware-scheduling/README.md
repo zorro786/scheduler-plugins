@@ -160,7 +160,7 @@ The above is a plot of the piecewise function outlined in the algorithm. The key
 ```go
 type PluginArgs struct {
     TargetCPUUtilisation    int
-    DefaultCPURequests      int
+    DefaultCPURequests      v1.ResourceList
 }
 ```
 
