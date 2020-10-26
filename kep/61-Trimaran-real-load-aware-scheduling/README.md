@@ -57,13 +57,13 @@ If you choose to enable "NodeResourcesMostAllocated" in tree plugin which is not
 ### Risks and Mitigations
 
 If utilization metrics are not available for a long time, we will fall back to the best fit bin pack based on allocations. There is no user action needed for this.
-To achieve X% utilization, it is recommended to set the value as X - 10 in practice. Refer to BestFitBinPack Score Plugin below for more details.
+To achieve X% utilization, it is recommended to set the value as X - 10 in practice. Refer to TargetLoadPacking Score Plugin below for more details.
 For more details on risks and mitigations associated with live metrics, refer to "Bad Metrics".
 
 
 ## Design Details
 
-Our design consists of the following components as outlined in the diagram and described below. We propose two plugins namely "BestFitBinPack" and "SafeBalancing". Both of them use metrics from load watcher for scoring nodes with different algorithms.
+Our design consists of the following components as outlined in the diagram and described below. We propose two plugins namely "TargetLoadPacking" and "SafeBalancing". Both of them use metrics from load watcher for scoring nodes with different algorithms.
 
 <img src="images/design.png" alt="design" width="720" height="628"/>
 
@@ -91,11 +91,11 @@ The file will be stored in host file system, so it will be persisted across pod 
 
 This uses the scheduler framework of K8s to incorporate our customized real load aware scheduler plugins without modifying the core scheduler code. The plugins we proposed mainly include the following two.
 
-- BestFitBinPack Plugin: It is best fit variant of bin pack algorithm that scores nodes by their actual resource utilization in a way that all utilized nodes have around x% of utilization.
+- TargetLoadPacking Plugin: It is best fit variant of bin pack algorithm that scores nodes by their actual resource utilization in a way that all utilized nodes have around x% of utilization. Once all nodes reach x% utilization it moves to least fit variant.
 - Safe Balancing Plugin: It is a node sorting plugin that sorts nodes base on both the mean and the standard deviation of node resource utilization. It aims to balance not only the average load but also the risk caused by load variations.
 
 
-### BestFitBinPack Plugin
+### TargetLoadPacking Plugin
 
 
 #### Score plugin
@@ -144,7 +144,7 @@ The X% threshold value for utilisation will be made configurable via plugin argu
 
 **Algorithm Analysis**
 
-<img src="images/bfbp-graph.png" alt="bfbp-graph" width="600" height="400"/>
+<img src="images/tlp-graph.png" alt="tlp-graph" width="600" height="400"/>
 
 
 The above is a plot of the piecewise function outlined in the algorithm. The key observations here are manifold:
@@ -342,7 +342,7 @@ Returns metrics for the hostname given
 
 ### **Scheduled Pods State**
 
-A controller will be added as a go routine watching events on `.spec.nodeName`. This will maintain a time ordered state of node → pod mappings for pods scheduled successfully in last 5 minutes. This state will be maintained across scheduling cycles and used from BestFitBinPack/SafeScheduling Score plugin. It will help to predict utilisation based on allocations when metrics are bad, especially in case 1 above (Unavailability of metrics).
+A controller will be added as a go routine watching events on `.spec.nodeName`. This will maintain a time ordered state of node → pod mappings for pods scheduled successfully in last 5 minutes. This state will be maintained across scheduling cycles and used from TargetLoadPacking/SafeScheduling Score plugin. It will help to predict utilisation based on allocations when metrics are bad, especially in case 1 above (Unavailability of metrics).
 
 
 ### **Test Plan**
