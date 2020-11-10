@@ -24,6 +24,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sigs.k8s.io/scheduler-plugins/pkg/trimaran/targetloadpacking"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -273,6 +274,47 @@ profiles:
 		t.Fatal(err)
 	}
 
+	// TargetLoadPacking plugin config
+	targetLoadPackingConfigFile := filepath.Join(tmpDir, "targetLoadPacking.yaml")
+	if err := ioutil.WriteFile(targetLoadPackingConfigFile, []byte(fmt.Sprintf(`
+apiVersion: kubescheduler.config.k8s.io/v1beta1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: "%s"
+profiles:
+- plugins:
+    score:
+      enabled:
+      - name: TargetLoadPacking
+      disabled:
+      - name: "*"
+`, configKubeconfig)), os.FileMode(0600)); err != nil {
+		t.Fatal(err)
+	}
+
+	// TargetLoadPacking plugin config with arguments
+	targetLoadPackingConfigWithArgsFile := filepath.Join(tmpDir, "targetLoadPacking-with-args.yaml")
+	if err := ioutil.WriteFile(targetLoadPackingConfigWithArgsFile, []byte(fmt.Sprintf(`
+apiVersion: kubescheduler.config.k8s.io/v1beta1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: "%s"
+profiles:
+- plugins:
+    score:
+      enabled:
+      - name: TargetLoadPacking
+      disabled:
+      - name: "*"
+  pluginConfig:
+  - name: TargetLoadPacking
+    args:
+      TargetCPUUtilization: 60 
+      DefaultCPURequests: 1
+`, configKubeconfig)), os.FileMode(0600)); err != nil {
+		t.Fatal(err)
+	}
+
 	// multiple profiles config
 	multiProfilesConfig := filepath.Join(tmpDir, "multi-profiles.yaml")
 	if err := ioutil.WriteFile(multiProfilesConfig, []byte(fmt.Sprintf(`
@@ -452,6 +494,40 @@ profiles:
 					"QueueSortPlugin":  defaultPlugins["QueueSortPlugin"],
 					"ReservePlugin":    {{Name: "VolumeBinding"}},
 					"ScorePlugin":      {{Name: "NodeResourcesAllocatable", Weight: 1}},
+				},
+			},
+		},
+		{
+			name:            "single profile config - TargetLoadPacking",
+			flags:           []string{"--config", targetLoadPackingConfigFile},
+			registryOptions: []app.Option{app.WithPlugin(targetloadpacking.Name, targetloadpacking.New)},
+			wantPlugins: map[string]map[string][]kubeschedulerconfig.Plugin{
+				"default-scheduler": {
+					"BindPlugin":       {{Name: "DefaultBinder"}},
+					"FilterPlugin":     defaultPlugins["FilterPlugin"],
+					"PostFilterPlugin": {{Name: "DefaultPreemption"}},
+					"PreBindPlugin":    {{Name: "VolumeBinding"}},
+					"PreFilterPlugin":  defaultPlugins["PreFilterPlugin"],
+					"QueueSortPlugin":  defaultPlugins["QueueSortPlugin"],
+					"ReservePlugin":    {{Name: "VolumeBinding"}},
+					"ScorePlugin":      {{Name: targetloadpacking.Name, Weight: 1}},
+				},
+			},
+		},
+		{
+			name:            "single profile config - TargetLoadPacking with args",
+			flags:           []string{"--config", targetLoadPackingConfigWithArgsFile},
+			registryOptions: []app.Option{app.WithPlugin(targetloadpacking.Name, targetloadpacking.New)},
+			wantPlugins: map[string]map[string][]kubeschedulerconfig.Plugin{
+				"default-scheduler": {
+					"BindPlugin":       {{Name: "DefaultBinder"}},
+					"FilterPlugin":     defaultPlugins["FilterPlugin"],
+					"PostFilterPlugin": {{Name: "DefaultPreemption"}},
+					"PreBindPlugin":    {{Name: "VolumeBinding"}},
+					"PreFilterPlugin":  defaultPlugins["PreFilterPlugin"],
+					"QueueSortPlugin":  defaultPlugins["QueueSortPlugin"],
+					"ReservePlugin":    {{Name: "VolumeBinding"}},
+					"ScorePlugin":      {{Name: targetloadpacking.Name, Weight: 1}},
 				},
 			},
 		},

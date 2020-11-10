@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	schedulerconfig "k8s.io/kube-scheduler/config/v1"
 )
 
@@ -72,4 +73,21 @@ type CapacitySchedulingArgs struct {
 
 	// KubeConfigPath is the path of kubeconfig.
 	KubeConfigPath *string `json:"kubeconfigpath,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// TargetLoadPackingArgs holds arguments used to configure TargetLoadPacking plugin.
+type TargetLoadPackingArgs struct {
+	metav1.TypeMeta 	`json:",inline"`
+
+	// Node target CPU Utilisation for bin packing
+	TargetCPUUtilization float64 `json:"mode,omitempty"`
+	// Default CPU requests to use for best effort QoS
+	DefaultCPURequests   int64 `json:"mode,omitempty"`
+}
+
+// TODO(aqadeer): Use codegen for this
+func (b TargetLoadPackingArgs) DeepCopyObject() runtime.Object {
+	panic("implement me")
 }
